@@ -1,2 +1,3 @@
 entrypoints:
-  default: run.py
+  compute: run.py
+  gather: gather.R

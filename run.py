@@ -45,6 +45,15 @@ def key_path(s):
         raise argparse.ArgumentTypeError(f"expected key=path, got {s!r}")
     return key, path
 
+def replace_none(obj, value):
+    if obj is None:
+        return value
+    if isinstance(obj, dict):
+        return {k: replace_none(v, value) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [replace_none(v, value) for v in obj]
+    return obj
+
 def main():
     parser = argparse.ArgumentParser(description="Benchmarking entrypoint")
 
@@ -118,8 +127,8 @@ def main():
         "clustering_info": clustering_info,
     }
 
-    with open(outputs["metrics_metrics"], "w") as f:
-        json.dump(metrics, f, indent=2, sort_keys=False)
+    with open(outputs["metrics_json"], "w") as f:
+        json.dump(replace_none(metrics, "NA"), f, indent=2, sort_keys=False)
 
 
 if __name__ == "__main__":
