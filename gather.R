@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
   library(argparse)
   library(jsonlite)
+  library(dplyr)
 })
 
 parser <- ArgumentParser(description = "Benchmarking entrypoint")
@@ -34,13 +35,9 @@ for (i in 1:length(output)) {
 }
 cat(sprintf("----------------------------------\n"))
 
-# Recursively flatten nested lists to a named numeric vector (null -> NA)
-flatten <- function(x, prefix = NULL) {
-  if (is.null(x)) return(setNames(NA_real_, prefix))
-  if (!is.list(x)) return(setNames(as.numeric(x), prefix))
-  unlist(lapply(names(x), function(n) flatten(x[[n]], paste(c(prefix, n), collapse = "_"))))
-}
-
+na_fix <- function(x) rapply(x, function(v) {
+  if (all(v == "NA")) NA else replace(v, v == "NA", NA)
+}, classes = "character", how = "replace")
 
 # read JSON lineage file, get list of files
 d <- read_json(args$`from-files`)
@@ -52,40 +49,17 @@ for (i in 1:length(files)) {
   cat(sprintf("File [%d/%d]: %s\n", i, length(files), files[i]))
 }
 
-jsons <- lapply(files, fromJSON, simplifyVector = TRUE)  # read JSONs
-dfs <- do.call(rbind, lapply(jsons, data.frame))         # flatten the metrics, make df
+jsons <- lapply(files, function(u) {                # read JSONs, fix NAs
+  na_fix(fromJSON(u, simplifyVector = TRUE)) 
+})
+df <- bind_rows(lapply(jsons, data.frame))         # flatten the metrics, make df
 
 
+tim_cols <- grepl("timings", colnames(df))
 
-
-
-# Bind named vectors into a data frame, aligning columns across files
-bind_rows_named <- function(rows, ids) {
-  cols <- unique(unlist(lapply(rows, names)))
-  m <- do.call(rbind, lapply(rows, function(r) unname(r[cols])))
-  colnames(m) <- cols
-  data.frame(file = ids, m, check.names = FALSE, row.names = NULL)
-}
-
-ids  <- sub("\\.json$", "", basename(files))
-json <- lapply(files, fromJSON, simplifyVector = TRUE)
-
-metrics <- bind_rows_named(lapply(json, function(j) c(
-  flatten(j$agreement),                    # ari_leiden, nmi_louvain, ...
-  flatten(j$structure),                    # silhouette_leiden, ...
-  flatten(j$n_clusters, "n_clusters"),
-  dropped_cells = as.numeric(j$dropped_cells),
-  flatten(j$clustering_info)               # resolutions_leiden, num_runs_leiden, ...
-)), ids)
-
-timings <- bind_rows_named(lapply(json, function(j) flatten(j$timings)), ids)
-
-write.csv(metrics, paste0(prefix, "_metrics.csv"), row.names = FALSE)
-write.csv(timings, paste0(prefix, "_timings.csv"), row.names = FALSE)
-print(metrics); print(timings)
-
-
-
-
-
+# write TSVs
+write.table(cbind(node_id = ids, df[,!tim_cols]), output[["metrics_tsv"]], 
+            row.names = FALSE, sep = "\t", quote = FALSE)
+write.table(cbind(node_id = ids, df[,tim_cols]), output[["timings_tsv"]], 
+            row.names = FALSE, sep = "\t", quote = FALSE)
 
