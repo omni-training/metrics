@@ -42,7 +42,8 @@ na_fix <- function(x) rapply(x, function(v) {
 # read JSON lineage file, get list of files
 d <- read_json(args$`from-files`)
 files <- sapply(d$members, .subset2, "files")
-ids <- sapply(d$members, .subset2, "node_id")
+#ids <- sapply(d$members, .subset2, "node_id")
+dirs <- sapply(d$members, .subset2, "dir")
 
 cat(sprintf("Number of files to gather: %d\n", length(d$members)))
 for (i in 1:length(files)) {
@@ -58,8 +59,8 @@ df <- bind_rows(lapply(jsons, data.frame))         # flatten the metrics, make d
 tim_cols <- grepl("timings", colnames(df))
 
 # write TSVs
-write.table(cbind(node_id = ids, df[,!tim_cols]), output[["metrics_tsv"]], 
+write.table(cbind(dirname = dirs, df[,!tim_cols]), output[["metrics_tsv"]], 
             row.names = FALSE, sep = "\t", quote = FALSE)
-write.table(cbind(node_id = ids, df[,tim_cols]), output[["timings_tsv"]], 
+write.table(cbind(dirname = dirs, df[,tim_cols]), output[["timings_tsv"]], 
             row.names = FALSE, sep = "\t", quote = FALSE)
 
